@@ -47,9 +47,17 @@ class FreeKassa:
                     url=self._get_url(route, **kwargs),
                     json=self._get_data(additional_fields),
                 )
+                response.raise_for_status()
+
                 return response.json()
+
+            except httpx.HTTPStatusError as exc:
+                raise FrekassaException(
+                    status_code=exc.response.status_code, text=exc.response.json()
+                )
+
             except httpx.RequestError as exc:
-                raise FrekassaException(f"Ошибка при выполнении запроса: {exc}")
+                raise RuntimeError(f"Ошибка сети или сервера: {exc}")
 
     def _get_signature(self, data):
         cdata = dict(data)
@@ -104,19 +112,3 @@ class FreeKassa:
         )
 
         return res
-
-
-# if __name__ == "__main__":
-#     SHOP_ID = ""
-#     API_KEY = ""
-#     fk = FreeKassa(shop_id=SHOP_ID, api_key=API_KEY)
-#     asyncio.run(fk.get_balance())
-#     asyncio.run(
-#         fk.create_order(
-#             email="",
-#             ip="",
-#             amount=9.9,
-#             currency_code="USD",
-#             payment_system_id=36,
-#         )
-#     )
