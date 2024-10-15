@@ -1,8 +1,8 @@
-import asyncio
-from collections import OrderedDict
 import datetime
 import hashlib
 import hmac
+from collections import OrderedDict
+from typing import Any, Dict, Optional
 
 import httpx
 
@@ -18,25 +18,29 @@ class FreeKassa:
     def __init__(self, api_key: str, shop_id: str):
         self._api_key = api_key
         self._shop_id = shop_id
-        self._set_nonce()
 
     def _set_nonce(self):
         self._nonce = int(datetime.datetime.now().timestamp())
 
-    def _get_data(self, additional_fields=dict):
+    def _get_data(self, additional_fields: Dict[str, Any]) -> OrderedDict[str, Any]:
         data = OrderedDict({"shopId": self._shop_id, "nonce": self._nonce})
         data.update(additional_fields)
         data.update({"signature": self._get_signature(data=data)})
 
         return data
 
-    def _get_url(self, route, **kwargs):
+    def _get_url(self, route: str, **kwargs) -> str:
         url = f"{self.API_URL}{route}"
         for key, value in kwargs:
             url = url.replace(f"%{key}%", value)
         return url
 
-    async def _request(self, route, additional_fields=None, **kwargs):
+    async def _request(
+        self,
+        route: str,
+        additional_fields: Optional[Dict[str, Any]] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
         self._set_nonce()
         if additional_fields is None:
             additional_fields = {}
@@ -52,28 +56,28 @@ class FreeKassa:
                 return response.json()
 
             except httpx.HTTPStatusError as exc:
-                raise FrekassaException(
-                    status_code=exc.response.status_code, text=exc.response.json()
-                )
+                raise FrekassaException(status_code=exc.response.status_code, text=exc.response.json())
 
             except httpx.RequestError as exc:
-                raise RuntimeError(f"Ошибка сети или сервера: {exc}")
+                raise RuntimeError(f"Server or Network error {exc}")
 
-    def _get_signature(self, data):
+    def _get_signature(self, data: Dict[str, Any]) -> str:
         cdata = dict(data)
         if "amount" in cdata:
             amount = cdata["amount"]
-            _ = f"{round(amount % 1, 2)}"[1:4] if amount % 1 > 0 else ""
-            cdata["amount"] = f"{int(amount)}{_}"
-        msg = "|".join([str(cdata.get(key)) for key in sorted(cdata.keys())])
-        hash_object = hmac.new(
-            key=self._api_key.encode(), msg=msg.encode(), digestmod=hashlib.sha256
-        )
+
+            fractional_part = f"{round(amount % 1, 2)}"[1:4] if amount % 1 > 0 else ""
+            cdata["amount"] = f"{int(amount)}{fractional_part}"
+
+        msg = "|".join(str(cdata[key]) for key in sorted(cdata))
+
+        hash_object = hmac.new(key=self._api_key.encode(), msg=msg.encode(), digestmod=hashlib.sha256)
+
         return hash_object.hexdigest()
 
     async def get_balance(self):
         res = await self._request(self.API_BALANCE_ROUTE)
-        print(res)
+
         return res
 
     async def create_order(
@@ -82,13 +86,13 @@ class FreeKassa:
         email: str,
         ip: str,
         amount: float,
-        currency_code: str = "RUB",
-        payment_id: str = None,
-        tel: str = None,
-        success_url: str = None,
-        failure_url: str = None,
-        notification_url: str = None,
-    ):
+        currency_code: str = "USD",
+        payment_id: Optional[str] = None,
+        tel: Optional[str] = None,
+        success_url: Optional[str] = None,
+        failure_url: Optional[str] = None,
+        notification_url: Optional[str] = None,
+    ) -> Dict[str, Any]:
         additional_fields = {
             "i": payment_system_id,
             "email": email,
@@ -107,8 +111,6 @@ class FreeKassa:
             additional_fields["failure_url"] = failure_url
         if notification_url:
             additional_fields["notification_url"] = notification_url
-        res = await self._request(
-            self.API_ORDERS_CREATE_ROUTE, additional_fields=additional_fields
-        )
+        res = await self._request(self.API_ORDERS_CREATE_ROUTE, additional_fields=additional_fields)
 
         return res
