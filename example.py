@@ -46,17 +46,9 @@ if __name__ == "__main__":
         amount=9.9,
         tel="+1234567890",
     )
-    order.model_dump()
+    order_dict = order.model_dump()
     try:
-        asyncio.run(
-            fk.create_order(
-                email="tesslogun@gmail.com",
-                ip="151.236.25.124",
-                amount=9.9,
-                currency_code="USD",
-                payment_system_id=36,
-            )
-        )
+        asyncio.run(fk.create_order(**order_dict))
     except FrekassaException as e:
         print(f"{e.message}")
 
